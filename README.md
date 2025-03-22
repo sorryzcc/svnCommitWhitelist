@@ -7,3 +7,5 @@ python print_http_body.py 8080
 node processOneTimeWhitelist.js
 
 node processSvnCommitWhitelist.js
+
+node svnCommitWhitelistHandler.js
