@@ -32,10 +32,17 @@ app.post('/', async (req, res) => {
       throw new Error(`Missing required fields: ${missing.join(', ')}`);
     }
 
+    // 如果 paths 为空，直接返回 200
+    if (!Array.isArray(request_data.paths) || request_data.paths.length === 0) {
+      return res.status(200).json({ status: 200, message: "No branches to check, allowing commit." });
+    }
+
     const conn = await pool.getConnection();
     try {
       // 查询 tb_branch_info 表，获取所有分支信息
       const [branchRows] = await conn.execute('SELECT * FROM tb_branch_info');
+
+      let hasMatchingBranch = false; // 标记是否有匹配的分支
 
       for (const branch of branchRows) {
         const {
@@ -52,6 +59,8 @@ app.post('/', async (req, res) => {
           continue; // 如果当前分支不在请求的 paths 中，跳过
         }
 
+        hasMatchingBranch = true; // 标记有匹配的分支
+
         // 如果 svn_lock_status 为 0，直接返回 200
         if (svn_lock_status === 0) {
           return res.status(200).json({ status: 200, message: `Branch "${svn_branch_name}" lock status is 0` });
@@ -62,7 +71,7 @@ app.post('/', async (req, res) => {
           return res.status(200).json({ status: 200, message: `User "${request_data.user_name}" is in the whitelist for branch "${svn_branch_name}"` });
         }
 
-        // 检查 svn_lock_disposable_whitelist 和计数
+        // 检查 svn_lock_disposable_whitelist 是否包含 user_name 并且计数大于 0
         if (
           svn_lock_disposable_whitelist.includes(request_data.user_name) &&
           svn_lock_disposable_whitelist_count > 0
@@ -84,8 +93,10 @@ app.post('/', async (req, res) => {
         throw new Error(`Access denied for branch "${svn_branch_name}"`);
       }
 
-      // 如果没有匹配的分支
-      throw new Error("No matching branches found in the request paths.");
+      // 如果没有匹配的分支，直接返回 200
+      if (!hasMatchingBranch) {
+        return res.status(200).json({ status: 200, message: "No matching branches found, allowing commit." });
+      }
     } finally {
       conn.release(); // 释放连接回到连接池
     }
