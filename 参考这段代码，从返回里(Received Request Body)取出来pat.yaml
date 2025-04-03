@@ -1,0 +1,6 @@
+参考这段代码，从返回里(Received Request Body)取出来paths
+
+这是一段返回Received Request Body: {"object_kind":"post_commit","operation_kind":"update","action_kind":"svn client commit","user_name":"v_zccgzhang","user_id":346046,"user_email":"v_zccgzhang@tencent.com","project_id":1426884,"repository":{"name":"ZCCtestSVN","description":"","homepage":"http://git.woa.com/v_zccgzhang/ZCCtestSVN","svn_http_url":"https://svn.woa.com/v_zccgzhang/ZCCtestSVN","svn_ssh_url":"svn+ssh://svn.woa.com/v_zccgzhang/ZCCtestSVN","url":"svn+ssh://svn.woa.com/v_zccgzhang/ZCCtestSVN","visibility_level":0},"timestamp":"2025-04-03T07:59:39+0000","revision":7,"message":"增加文件","files":[{"type":"A","file":"branches/fix_bug/test/test2.excel","directory":false,"isFile":true,"size":-1,"insertions":0,"deletions":0}],"paths":["branches/fix_bug/test/"],"total_files_count":1,"create_and_update":null,"push_options":{},"push_timestamp":"2025-04-03T07:59:40+0000","userName":"v_zccgzhang","rep_name":"v_zccgzhang/ZCCtestSVN","log":"增加文件","commitTime":1743667179000}
+Sent Response: {"status":200,"message":"Processed commit by v_zccgzhang, remaining uses: 105"}
+
+把fix_bug写入到数据库里
