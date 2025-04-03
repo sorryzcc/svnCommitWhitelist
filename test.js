@@ -90,7 +90,7 @@ app.post('/', async (req, res) => {
         }
 
         // 如果条件不满足，返回 403 错误
-        throw new Error(`您不在 "${svn_branch_name}"的永久白名单或者一次性白名单`);
+        throw new Error(`您不在 "${svn_branch_name}"分支的永久白名单或者一次性白名单`);
       }
 
       // 如果没有匹配的分支，直接返回 200
