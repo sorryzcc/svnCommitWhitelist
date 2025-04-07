@@ -72,12 +72,19 @@ app.post('/', async (req, res) => {
 
         // 检查 svn_lock_disposable_whitelist 是否包含 user_name
         if (svn_lock_disposable_whitelist.includes(request_data.user_name)) {
-          // 移除用户名称并更新数据库
-          const updatedWhitelist = svn_lock_disposable_whitelist
-            .split(',')
-            .filter(name => name !== request_data.user_name)
-            .join(',');
+          // 将一次性白名单分割成数组
+          let whitelistArray = svn_lock_disposable_whitelist.split(',');
 
+          // 找到第一个匹配的用户并移除
+          const index = whitelistArray.indexOf(request_data.user_name);
+          if (index !== -1) {
+            whitelistArray.splice(index, 1); // 移除一个匹配项
+          }
+
+          // 将更新后的一次性白名单重新拼接成字符串
+          const updatedWhitelist = whitelistArray.join(',');
+
+          // 更新数据库
           await conn.execute(
             'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ?',
             [updatedWhitelist, svn_branch_name]
@@ -85,7 +92,7 @@ app.post('/', async (req, res) => {
 
           return res.status(200).json({
             status: 200,
-            message: `Processed commit by ${request_data.user_name} for branch "${svn_branch_name}", removed from disposable whitelist`
+            message: `Processed commit by ${request_data.user_name} for branch "${svn_branch_name}", removed one use from disposable whitelist`
           });
         }
 
