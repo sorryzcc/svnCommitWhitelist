@@ -49,8 +49,7 @@ app.post('/', async (req, res) => {
           svn_branch_name,
           svn_lock_status,
           svn_lock_whitelist,
-          svn_lock_disposable_whitelist,
-          svn_lock_disposable_whitelist_count
+          svn_lock_disposable_whitelist
         } = branch;
 
         // 检查当前分支是否在请求的 paths 中
@@ -71,21 +70,22 @@ app.post('/', async (req, res) => {
           return res.status(200).json({ status: 200, message: `User "${request_data.user_name}" is in the whitelist for branch "${svn_branch_name}"` });
         }
 
-        // 检查 svn_lock_disposable_whitelist 是否包含 user_name 并且计数大于 0
-        if (
-          svn_lock_disposable_whitelist.includes(request_data.user_name) &&
-          svn_lock_disposable_whitelist_count > 0
-        ) {
-          // 减少计数并更新数据库
+        // 检查 svn_lock_disposable_whitelist 是否包含 user_name
+        if (svn_lock_disposable_whitelist.includes(request_data.user_name)) {
+          // 移除用户名称并更新数据库
+          const updatedWhitelist = svn_lock_disposable_whitelist
+            .split(',')
+            .filter(name => name !== request_data.user_name)
+            .join(',');
+
           await conn.execute(
-            'UPDATE tb_branch_info SET svn_lock_disposable_whitelist_count = svn_lock_disposable_whitelist_count - 1 WHERE svn_branch_name = ?',
-            [svn_branch_name]
+            'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ?',
+            [updatedWhitelist, svn_branch_name]
           );
 
-          const remainingUses = svn_lock_disposable_whitelist_count - 1;
           return res.status(200).json({
             status: 200,
-            message: `Processed commit by ${request_data.user_name} for branch "${svn_branch_name}", remaining uses: ${remainingUses}`
+            message: `Processed commit by ${request_data.user_name} for branch "${svn_branch_name}", removed from disposable whitelist`
           });
         }
 

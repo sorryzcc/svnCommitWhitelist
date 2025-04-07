@@ -27,3 +27,11 @@
     "_id": 6
   }
 ]
+
+
+不对呀 
+    "svn_lock_disposable_whitelist": "v_zccgzhang,v_zccgzhang,v_zccgzhang",
+提交之后，
+
+
+    应该是这样"svn_lock_disposable_whitelist": "v_zccgzhang,v_zccgzhang",而不是清空
