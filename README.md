@@ -1,1 +1,1 @@
-node svnCommitWhitelistHandler.js
+node test.js
