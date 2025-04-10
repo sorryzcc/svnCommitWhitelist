@@ -61,13 +61,13 @@ app.post('/', async (req, res) => {
     }
 
     // 如果没有匹配到分支锁定/解锁指令
-    res.status(400).json({
+    res.status(200).json({
       msgtype: 'text',
       text: { content: '未识别的指令' },
     });
   } catch (err) {
     logger.error(`处理请求时发生错误：${err.message}`);
-    res.status(500).json({
+    res.status(200).json({
       msgtype: 'text',
       text: { content: `处理请求时发生错误：${err.message}` },
     });
