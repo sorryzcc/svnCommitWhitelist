@@ -12,8 +12,8 @@ const logger = {
 };
 
 // 模拟数据库更新函数（实际应替换为真实数据库操作）
-function updateBranchLockStatus(branchName, lockStatus) {
-  logger.info(`尝试${lockStatus === 1 ? '锁定' : '解锁'}分支：${branchName}`);
+function updateBranchLockStatus(branchName, svn_lock_status) {
+  logger.info(`尝试${svn_lock_status === 1 ? '锁定' : '解锁'}分支：${branchName}`);
   // 这里可以替换为真实的数据库操作
   // 示例：假设返回 true 表示更新成功
   return true;
@@ -39,17 +39,17 @@ app.post('/', async (req, res) => {
       const branchName = match[2]; // 分支名称
 
       // 根据动作设置锁定状态
-      const lockStatus = action === '锁' ? 1 : 0;
+      const svn_lock_status = action === '锁' ? 1 : 0;
 
       // 调用分支锁定/解锁逻辑
-      const success = updateBranchLockStatus(branchName, lockStatus);
+      const success = updateBranchLockStatus(branchName, svn_lock_status);
 
       // 构造回复消息
       let replyMessage = '';
       if (success) {
-        replyMessage = `已成功${lockStatus === 1 ? '锁定' : '解锁'}分支 ${branchName}`;
+        replyMessage = `已成功${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchName}`;
       } else {
-        replyMessage = `${lockStatus === 1 ? '锁定' : '解锁'}分支 ${branchName} 失败，请检查日志`;
+        replyMessage = `${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchName} 失败，请检查日志`;
       }
 
       // 返回响应消息
