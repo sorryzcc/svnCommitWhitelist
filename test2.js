@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const os = require('os'); // 引入 os 模块
 
 // 创建 Express 应用
 const app = express();
@@ -76,6 +77,29 @@ app.post('/', async (req, res) => {
 
 // 启动服务
 const PORT = 8080;
-app.listen(PORT, () => {
-  logger.info(`服务器已启动，监听端口：${PORT}`);
+const HOST = '0.0.0.0'; // 监听所有可用的网络接口
+
+// 获取本机的 IPv4 地址
+function getLocalIPv4Address() {
+  const interfaces = os.networkInterfaces(); // 获取所有网络接口
+  for (const interfaceName in interfaces) {
+    const iface = interfaces[interfaceName];
+    for (const alias of iface) {
+      if (alias.family === 'IPv4' && !alias.internal) {
+        // 找到非内部（非回环）的 IPv4 地址
+        return alias.address;
+      }
+    }
+  }
+  return '127.0.0.1'; // 如果没有找到合适的 IPv4 地址，则返回 localhost
+}
+
+const server = app.listen(PORT, HOST, () => {
+  const addressInfo = server.address();
+
+  const ip = getLocalIPv4Address(); // 获取本地 IPv4 地址
+
+  const port = addressInfo.port;
+
+  logger.info(`服务器已启动，监听地址：http://${ip}:${port}`);
 });
