@@ -1,0 +1,7 @@
+在这个代码之上增加锁库、开闸、一次性、永久的功能
+
+INFO: Received Request Body: {"user_name":"v_zccgzhang","operation_kind":"create","event_type":"svn_pre_commit","user_id":346046,"user_email":"v_zccgzhang@tencent.com","project_id":1426884,"repository":{"name":"ZCCtestSVN","description":"","homepage":"https://git.woa.com/v_zccgzhang/ZCCtestSVN","svn_http_url":"https://svn.woa.com/v_zccgzhang/ZCCtestSVN","svn_ssh_url":"svn+ssh://svn.woa.com/v_zccgzhang/ZCCtestSVN"},"timestamp":"2025-04-14T06:26:21+0000","object_kind":"pre_commit","action_kind":"svn client commit","revision":"ffffffffffffffffffffffffffffffffffffffff","message":"It is a test commit hook.","files":[],"paths":[],"total_files_count":0,"push_options":{},"push_timestamp":"2025-04-14T06:26:21+0000","userName":"v_zccgzhang","rep_name":"v_zccgzhang/ZCCtestSVN","log":"It is a test commit hook."}
+ERROR: Invalid command format.
+
+INFO: Received Request Body: {"from":{"userid":"T02260039A","name":"张匆匆","alias":"v_zccgzhang"},"webhook_url":"http://in.qyapi.weixin.qq.com/cgi-bin/webhook/send?key=3569ccde-41a7-4084-8bc7-31679b875e15","chatid":"wrkSFfCgAAJQyxQI1nnFqXMwE9_3bWbA","get_chat_info_url":"http://in.qyapi.weixin.qq.com/cgi-bin/webhook/get_chat_info?code=OVXkbhE0-xZNrVJsvappz02ookPxAro3AzLrDqeyVbE","msgid":"CIGABBC01vK/BhjzsuLdlICAAyCaBQ==","chattype":"group","msgtype":"text","text":{"content":"@svn机器人 锁branches/copy_fixbug分支"}}
+ERROR: Missing required fields in request body.
