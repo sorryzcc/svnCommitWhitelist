@@ -28,7 +28,7 @@ const pool = mysql.createPool({
 // 更新分支锁定状态的函数
 function updateBranchLockStatus(branchName, svn_lock_status) {
   return new Promise((resolve, reject) => {
-    const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE branch_name = ?';
+    const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE svn_branch_name = ?';
     pool.query(query, [svn_lock_status, branchName], (error, results) => {
       if (error) {
         logger.error(`更新分支锁定状态失败：${error.message}`);
