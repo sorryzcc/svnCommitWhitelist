@@ -57,9 +57,7 @@ async function addDisposableWhitelist(branchName, whitelistUser) {
     let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
     const whitelistArray = currentWhitelist.split(',').filter(Boolean);
 
-    if (!whitelistArray.includes(whitelistUser)) {
-      whitelistArray.push(whitelistUser);
-    }
+    whitelistArray.push(whitelistUser);
 
     const updatedWhitelist = whitelistArray.join(',');
     const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ?';
