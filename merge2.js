@@ -200,8 +200,8 @@ app.post('/', async (req, res) => {
       // 处理机器人请求
       const textContent = body.text?.content || '';
 
-      // 匹配“锁库_分支名”或“开闸_分支名”
-      const lockUnlockPattern = /(锁库|开闸)_(\S+)/;
+      // 匹配“锁库 分支名”或“开闸 分支名”
+      const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/;
       const lockUnlockMatch = textContent.match(lockUnlockPattern);
 
       // 匹配“一次性 分支名 用户名”
