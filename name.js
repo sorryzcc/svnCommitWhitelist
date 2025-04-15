@@ -213,7 +213,7 @@ app.post('/', async (req, res) => {
         const textContent = body.text?.content || '';
   
         // 匹配“lock 分支名”或“unlock 分支名”
-        const lockUnlockPattern = /(lock|unlock)\s+(\S+)/;
+        const lockUnlockPattern = /(lock|unlockall)\s+(\S+)/;
         const lockUnlockMatch = textContent.match(lockUnlockPattern);
   
         // 匹配“一次性 分支名 用户名”
@@ -226,7 +226,7 @@ app.post('/', async (req, res) => {
   
         if (lockUnlockMatch) {
           // 处理分支锁定/解锁逻辑
-          const action = lockUnlockMatch[1]; // "lock" 或 "unlock"
+          const action = lockUnlockMatch[1]; // "lock" 或 "unlockall"
           const branchIdentifier = lockUnlockMatch[2]; // 分支名称或别名
   
           // 根据动作设置锁定状态
@@ -281,7 +281,7 @@ app.post('/', async (req, res) => {
         }
   
         // 如果没有匹配到任何指令，返回默认消息
-        return res.status(200).json({ msgtype: 'text', text: { content: `未识别的指令，请重新输入。\n示例：\n lock b02rel\n unlock b02rel @v_zccgzhang(张匆匆)\n unlock b02rel` } });
+        return res.status(200).json({ msgtype: 'text', text: { content: `未识别的指令，请重新输入。\n示例：\n lock b02rel\n unlock b02rel @v_zccgzhang(张匆匆)\n unlockall b02rel` } });
       } else if (body.user_name && body.operation_kind && body.event_type) {
         // 处理 Web 钩子请求
         const result = await handleWebhookRequest(body);
