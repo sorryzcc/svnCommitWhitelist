@@ -23,21 +23,25 @@ app.use(bodyParser.json());
 
 // 更新分支锁定状态的函数
 async function updateBranchLockStatus(branchIdentifier, svn_lock_status) {
-  const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE svn_branch_name = ? OR alias = ?';
-  try {
-    const [results] = await pool.execute(query, [svn_lock_status, branchIdentifier, branchIdentifier]);
-    if (results.affectedRows > 0) {
-      logger.info(`成功更新分支 ${branchIdentifier} 的锁定状态为 ${svn_lock_status}`);
-      return true;
-    } else {
-      logger.info(`未找到分支 ${branchIdentifier} 或状态未改变`);
-      return false;
+    const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE LOWER(svn_branch_name) = ? OR LOWER(alias) = ?';
+    try {
+      const [results] = await pool.execute(query, [
+        svn_lock_status,
+        branchIdentifier.toLowerCase(),
+        branchIdentifier.toLowerCase(),
+      ]);
+      if (results.affectedRows > 0) {
+        logger.info(`成功更新分支 ${branchIdentifier} 的锁定状态为 ${svn_lock_status}`);
+        return true;
+      } else {
+        logger.info(`未找到分支 ${branchIdentifier} 或状态未改变`);
+        return false;
+      }
+    } catch (error) {
+      logger.error(`更新分支锁定状态失败：${error.message}`);
+      throw error;
     }
-  } catch (error) {
-    logger.error(`更新分支锁定状态失败：${error.message}`);
-    throw error;
   }
-}
 
 // 增加一次性白名单的函数
 async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
@@ -208,19 +212,30 @@ app.post('/', async (req, res) => {
         // 处理机器人请求
         const textContent = body.text?.content || '';
   
-        // 匹配“锁库 分支名”或“开闸 分支名”
-        const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/i; // 支持大小写不敏感
+        // 匹配“锁库 分支名”或“开闸 分支名”（支持中英文）
+        const lockUnlockPattern = /(锁库|开闸|lock|unlock)\s+(\S+)/i; // 支持中英文指令
         const lockUnlockMatch = textContent.match(lockUnlockPattern);
         logger.info(`解析机器人指令：${lockUnlockMatch ? '匹配成功' : '匹配失败'}`);
   
         if (lockUnlockMatch) {
           logger.info(`匹配到分支操作指令：动作=${lockUnlockMatch[1]}, 分支标识=${lockUnlockMatch[2]}`);
   
-          const action = lockUnlockMatch[1]; // "锁库" 或 "开闸"
+          const actionMap = {
+            '锁库': 1,
+            '开闸': 0,
+            'lock': 1,
+            'unlock': 0,
+          };
+  
+          const action = lockUnlockMatch[1].toLowerCase(); // 动作关键字
           const branchIdentifier = lockUnlockMatch[2].trim(); // 分支名称或别名
   
           // 根据动作设置锁定状态
-          const svn_lock_status = action === '锁库' ? 1 : 0;
+          const svn_lock_status = actionMap[action];
+          if (svn_lock_status === undefined) {
+            logger.error(`未知的动作：${action}`);
+            return res.status(400).json({ msgtype: 'text', text: { content: '未知的操作，请使用“锁库/开闸”或“lock/unlock”。' } });
+          }
   
           // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
           const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
@@ -236,7 +251,7 @@ app.post('/', async (req, res) => {
           return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
         } else {
           logger.info('未匹配到分支操作指令');
-          return res.status(200).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
+          return res.status(400).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
         }
       } else if (body.user_name && body.paths) {
         // 处理 Web 钩子请求
