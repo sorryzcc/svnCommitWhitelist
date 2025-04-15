@@ -262,7 +262,7 @@ app.post('/', async (req, res) => {
           // 如果指令不匹配，返回友好的提示消息
           return res.status(200).json({
             msgtype: 'text',
-            text: { content: '未识别的指令，请重新输入。例如：@svn机器人 unlock 分支名 @目标用户' }
+            text: {content: `未识别的指令，请重新输入。\n示例：\n@svn机器人 lock b02rel\n@svn机器人 unlock b02rel @v_zccgzhang(张匆匆)\n@svn机器人 unlockall b02rel`}
           });
         }
       } else if (body.user_name && body.paths) {
