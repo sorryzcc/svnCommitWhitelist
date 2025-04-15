@@ -259,7 +259,11 @@ app.post('/', async (req, res) => {
           return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
         } else {
           logger.info('未匹配到一次性白名单指令');
-          return res.status(400).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
+          // 如果指令不匹配，返回友好的提示消息
+          return res.status(400).json({
+            msgtype: 'text',
+            text: { content: '未识别的指令，请重新输入。例如：@svn机器人 unlock 分支名 @目标用户' }
+          });
         }
       } else if (body.user_name && body.paths) {
         // 处理 Web 钩子请求
