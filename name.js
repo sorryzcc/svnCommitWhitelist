@@ -198,100 +198,59 @@ async function handleWebhookRequest(reqBody) {
   }
 }
 
-// POST 路由处理函数
 app.post('/', async (req, res) => {
-  try {
-    const body = req.body;
-    logger.info(`Received Request Body: ${JSON.stringify(body)}`);
-
-    // 判断是机器人请求还是 Web 钩子请求
-    if (body.from && body.webhook_url) {
-      // 处理机器人请求
-      const textContent = body.text?.content || '';
-
-      // 匹配“锁库 分支名”或“开闸 分支名”
-      const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/;
-      const lockUnlockMatch = textContent.match(lockUnlockPattern);
-
-      // 匹配“一次性 分支名 用户名”
-      const disposableWhitelistPattern = /一次性\s+(\S+)\s+(\S+)/;
-      const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
-
-      // 匹配“永久 分支名 用户名”
-      const permanentWhitelistPattern = /永久\s+(\S+)\s+(\S+)/;
-      const permanentWhitelistMatch = textContent.match(permanentWhitelistPattern);
-
-      if (lockUnlockMatch) {
-        // 处理分支锁定/解锁逻辑
-        const action = lockUnlockMatch[1]; // "锁库" 或 "开闸"
-        const branchIdentifier = lockUnlockMatch[2]; // 分支名称或别名
-
-        // 根据动作设置锁定状态
-        const svn_lock_status = action === '锁库' ? 1 : 0;
-
-        // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
-        const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
-
-        // 构造回复消息
-        let replyMessage = '';
-        if (success) {
-          replyMessage = `已成功${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier}`;
+    try {
+      const body = req.body;
+      logger.info(`Received Request Body: ${JSON.stringify(body)}`);
+  
+      // 判断是机器人请求还是 Web 钩子请求
+      if (body.from && body.webhook_url) {
+        // 处理机器人请求
+        const textContent = body.text?.content || '';
+  
+        // 匹配“锁库 分支名”或“开闸 分支名”
+        const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/i; // 支持大小写不敏感
+        const lockUnlockMatch = textContent.match(lockUnlockPattern);
+        logger.info(`解析机器人指令：${lockUnlockMatch ? '匹配成功' : '匹配失败'}`);
+  
+        if (lockUnlockMatch) {
+          logger.info(`匹配到分支操作指令：动作=${lockUnlockMatch[1]}, 分支标识=${lockUnlockMatch[2]}`);
+  
+          const action = lockUnlockMatch[1]; // "锁库" 或 "开闸"
+          const branchIdentifier = lockUnlockMatch[2].trim(); // 分支名称或别名
+  
+          // 根据动作设置锁定状态
+          const svn_lock_status = action === '锁库' ? 1 : 0;
+  
+          // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
+          const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
+  
+          // 构造回复消息
+          let replyMessage = '';
+          if (success) {
+            replyMessage = `已成功${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier}`;
+          } else {
+            replyMessage = `${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier} 失败，请检查分支是否存在`;
+          }
+  
+          return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
         } else {
-          replyMessage = `${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier} 失败，请检查分支是否存在`;
+          logger.info('未匹配到分支操作指令');
+          return res.status(200).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
         }
-
-        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
-      } else if (disposableWhitelistMatch) {
-        // 处理增加一次性白名单逻辑
-        const branchIdentifier = disposableWhitelistMatch[1]; // 分支名称或别名
-        const whitelistUser = disposableWhitelistMatch[2]; // 白名单用户
-
-        // 调用增加一次性白名单逻辑，支持通过分支名称或别名操作
-        const success = await addDisposableWhitelist(branchIdentifier, whitelistUser);
-
-        // 构造回复消息
-        let replyMessage = '';
-        if (success) {
-          replyMessage = `已成功为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser}`;
-        } else {
-          replyMessage = `为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser} 失败，请检查分支或用户信息`;
-        }
-
-        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
-      } else if (permanentWhitelistMatch) {
-        // 处理增加永久白名单逻辑
-        const branchIdentifier = permanentWhitelistMatch[1]; // 分支名称或别名
-        const whitelistUser = permanentWhitelistMatch[2]; // 白名单用户
-
-        // 调用增加永久白名单逻辑，支持通过分支名称或别名操作
-        const success = await addPermanentWhitelist(branchIdentifier, whitelistUser);
-
-        // 构造回复消息
-        let replyMessage = '';
-        if (success) {
-          replyMessage = `已成功为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser}`;
-        } else {
-          replyMessage = `为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser} 失败，请检查分支或用户信息`;
-        }
-
-        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
+      } else if (body.user_name && body.paths) {
+        // 处理 Web 钩子请求
+        const result = await handleWebhookRequest(body);
+        return res.status(result.status).json(result);
       } else {
-        // 如果没有匹配到任何指令，返回默认消息
-        return res.status(200).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
+        // 未知请求类型
+        return res.status(400).json({ status: 400, message: "Unknown request type." });
       }
-    } else if (body.user_name && body.paths) {
-      // 处理 Web 钩子请求
-      const result = await handleWebhookRequest(body);
-      return res.status(result.status).json(result);
-    } else {
-      // 未知请求类型
-      return res.status(400).json({ status: 400, message: "Unknown request type." });
+    } catch (error) {
+      logger.error(`处理请求时发生错误：${error.message}`);
+      return res.status(500).json({ status: 500, message: error.message });
     }
-  } catch (error) {
-    logger.error(`处理请求时发生错误：${error.message}`);
-    return res.status(500).json({ status: 500, message: error.message });
-  }
-});
+  });
 
 // 启动服务器
 app.listen(PORT, () => {
