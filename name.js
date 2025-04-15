@@ -1,153 +1,299 @@
+const logger = require('./logger'); 
 const express = require('express');
-const mysql = require('mysql2/promise');
-const logger = require('./logger'); // 假设有一个日志模块
+const bodyParser = require('body-parser');
+const mysql = require('mysql2/promise'); // 使用 promise 版本
 
 const app = express();
-app.use(express.json());
+const PORT = process.argv[2] || 8080;
 
-// 创建数据库连接池
+
+// 创建数据库连接池配置 - 使用 promise 版本
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: 'password',
-    database: 'your_database',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
+  host: '9.134.107.151',
+  user: 'root',
+  password: 'xuMwn*6829pBfx', // 注意：不要在生产环境中硬编码密码
+  port: '3306',
+  database: 'svn_tool',
+  waitForConnections: true,
+  connectionLimit: 10, // 根据实际情况调整
+  queueLimit: 0,
 });
 
-// 更新分支锁定状态
-async function updateBranchLockStatus(branchIdentifier, lockStatus) {
-    const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE svn_branch_name = ? OR alias = ?';
-    try {
-        const [results] = await pool.execute(query, [lockStatus, branchIdentifier, branchIdentifier]);
-        return results.affectedRows > 0;
-    } catch (error) {
-        logger.error(`更新分支锁状态失败：${error.message}`);
-        throw error;
+app.use(bodyParser.json());
+
+// 更新分支锁定状态的函数
+async function updateBranchLockStatus(branchIdentifier, svn_lock_status) {
+  const query = 'UPDATE tb_branch_info SET svn_lock_status = ? WHERE svn_branch_name = ? OR alias = ?';
+  try {
+    const [results] = await pool.execute(query, [svn_lock_status, branchIdentifier, branchIdentifier]);
+    if (results.affectedRows > 0) {
+      logger.info(`成功更新分支 ${branchIdentifier} 的锁定状态为 ${svn_lock_status}`);
+      return true;
+    } else {
+      logger.info(`未找到分支 ${branchIdentifier} 或状态未改变`);
+      return false;
     }
+  } catch (error) {
+    logger.error(`更新分支锁定状态失败：${error.message}`);
+    throw error;
+  }
 }
 
-// 添加一次性白名单用户
+// 增加一次性白名单的函数
 async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
-    const checkQuery = 'SELECT svn_lock_disposable_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
-    try {
-        const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
-        if (checkResults.length === 0) {
-            logger.info(`分支 ${branchIdentifier} 不存在，无法增加一次性白名单`);
-            return false;
-        }
-
-        let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
-        const whitelistArray = currentWhitelist.split(',').filter(Boolean);
-
-        if (!whitelistArray.includes(whitelistUser)) {
-            whitelistArray.push(whitelistUser);
-        }
-
-        const updatedWhitelist = whitelistArray.join(',');
-        const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
-        const [updateResults] = await pool.execute(updateQuery, [updatedWhitelist, branchIdentifier, branchIdentifier]);
-
-        return updateResults.affectedRows > 0;
-    } catch (error) {
-        logger.error(`增加一次性白名单失败：${error.message}`);
-        throw error;
+  const checkQuery = 'SELECT svn_lock_disposable_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
+  try {
+    const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
+    if (checkResults.length === 0) {
+      logger.info(`分支 ${branchIdentifier} 不存在，无法增加一次性白名单`);
+      return false;
     }
+
+    let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
+    const whitelistArray = currentWhitelist.split(',').filter(Boolean);
+
+    if (!whitelistArray.includes(whitelistUser)) {
+      whitelistArray.push(whitelistUser);
+    }
+
+    const updatedWhitelist = whitelistArray.join(',');
+    const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
+    const [updateResults] = await pool.execute(updateQuery, [updatedWhitelist, branchIdentifier, branchIdentifier]);
+
+    if (updateResults.affectedRows > 0) {
+      logger.info(`成功为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser}`);
+      return true;
+    } else {
+      logger.info(`未能为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser}`);
+      return false;
+    }
+  } catch (error) {
+    logger.error(`增加一次性白名单失败：${error.message}`);
+    throw error;
+  }
+}
+
+// 增加永久白名单的函数
+async function addPermanentWhitelist(branchIdentifier, whitelistUser) {
+  const checkQuery = 'SELECT svn_lock_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
+  try {
+    const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
+    if (checkResults.length === 0) {
+      logger.info(`分支 ${branchIdentifier} 不存在，无法增加永久白名单`);
+      return false;
+    }
+
+    let currentWhitelist = checkResults[0].svn_lock_whitelist || '';
+    const whitelistArray = currentWhitelist.split(',').filter(Boolean);
+
+    if (!whitelistArray.includes(whitelistUser)) {
+      whitelistArray.push(whitelistUser);
+    }
+
+    const updatedWhitelist = whitelistArray.join(',');
+    const updateQuery = 'UPDATE tb_branch_info SET svn_lock_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
+    const [updateResults] = await pool.execute(updateQuery, [updatedWhitelist, branchIdentifier, branchIdentifier]);
+
+    if (updateResults.affectedRows > 0) {
+      logger.info(`成功为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser}`);
+      return true;
+    } else {
+      logger.info(`未能为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser}`);
+      return false;
+    }
+  } catch (error) {
+    logger.error(`增加永久白名单失败：${error.message}`);
+    throw error;
+  }
+}
+
+// 处理 Web 钩子请求的函数
+async function handleWebhookRequest(reqBody) {
+  const { user_name, paths } = reqBody;
+
+  if (!Array.isArray(paths) || paths.length === 0) {
+    return { status: 200, message: "No branches to check, allowing commit." };
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    // 查询 tb_branch_info 表，获取所有分支信息
+    const [branchRows] = await conn.execute('SELECT * FROM tb_branch_info');
+    logger.info(`从数据库中查询到的分支信息：${JSON.stringify(branchRows)}`);
+
+    let hasMatchingBranch = false; // 标记是否有匹配的分支
+    let responseMessages = []; // 存储所有分支的响应消息
+
+    for (const branch of branchRows) {
+      const {
+        svn_branch_name,
+        alias,
+        svn_lock_status,
+        svn_lock_whitelist,
+        svn_lock_disposable_whitelist,
+      } = branch;
+
+      // 检查当前分支是否在请求的 paths 中
+      const isBranchIncluded = paths.some(path => path.includes(svn_branch_name) || path.includes(alias));
+      if (!isBranchIncluded) {
+        logger.info(`分支 "${svn_branch_name}" (${alias}) 不在请求的 paths 中，跳过检查`);
+        continue; // 如果当前分支不在请求的 paths 中，跳过
+      }
+
+      hasMatchingBranch = true; // 标记有匹配的分支
+      logger.info(`正在检查分支 "${svn_branch_name}" (${alias}) 的锁定状态`);
+
+      // 如果 svn_lock_status 为 0，直接允许提交
+      if (svn_lock_status === 0) {
+        responseMessages.push(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 0，允许提交`);
+        logger.info(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 0，允许提交`);
+        continue;
+      }
+
+      // 检查 svn_lock_whitelist 是否包含 user_name
+      if (svn_lock_whitelist.split(',').filter(Boolean).includes(user_name)) {
+        responseMessages.push(`用户 "${user_name}" 在永久白名单中，允许提交分支 "${svn_branch_name}" (${alias})`);
+        logger.info(`用户 "${user_name}" 在永久白名单中，允许提交分支 "${svn_branch_name}" (${alias})`);
+        continue;
+      }
+
+      // 检查 svn_lock_disposable_whitelist 是否包含 user_name
+      const disposableWhitelistArray = svn_lock_disposable_whitelist.split(',').filter(Boolean);
+      const index = disposableWhitelistArray.indexOf(user_name);
+      if (index !== -1) {
+        disposableWhitelistArray.splice(index, 1); // 移除用户
+        const updatedWhitelist = disposableWhitelistArray.join(',');
+
+        // 更新数据库
+        await conn.execute(
+          'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?',
+          [updatedWhitelist, svn_branch_name, alias]
+        );
+
+        responseMessages.push(`用户 "${user_name}" 在一次性白名单中，已移除并允许提交分支 "${svn_branch_name}" (${alias})`);
+        logger.info(`用户 "${user_name}" 在一次性白名单中，已移除并允许提交分支 "${svn_branch_name}" (${alias})`);
+        continue;
+      }
+
+      // 如果以上条件都不满足，则拒绝提交
+      responseMessages.push(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 1，且用户 "${user_name}" 不在白名单中，拒绝提交`);
+      logger.error(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 1，且用户 "${user_name}" 不在白名单中，拒绝提交`);
+      return { status: 500, message: `提交被拒绝：分支 "${svn_branch_name}" (${alias}) 已锁定，且用户 "${user_name}" 不在白名单中。` };
+    }
+
+    // 如果没有任何匹配的分支，直接允许提交
+    if (!hasMatchingBranch) {
+      logger.info("没有匹配的分支，允许提交");
+      return { status: 200, message: "No matching branches found, allowing commit." };
+    }
+
+    // 返回所有分支的响应消息
+    logger.info(`所有分支的响应消息：${responseMessages}`);
+    return { status: 200, messages: responseMessages };
+  } catch (error) {
+    logger.error(`处理 Web 钩子请求时发生错误：${error.message}`);
+    return { status: 500, message: error.message };
+  } finally {
+    conn.release();
+  }
 }
 
 // POST 路由处理函数
 app.post('/', async (req, res) => {
-    try {
-        const body = req.body;
-        logger.info(`Received Request Body: ${JSON.stringify(body)}`);
+  try {
+    const body = req.body;
+    logger.info(`Received Request Body: ${JSON.stringify(body)}`);
 
-        // 判断是机器人请求还是 Web 钩子请求
-        if (body.from && body.webhook_url) {
-            // 处理机器人请求
-            const textContent = body.text?.content || '';
+    // 判断是机器人请求还是 Web 钩子请求
+    if (body.from && body.webhook_url) {
+      // 处理机器人请求
+      const textContent = body.text?.content || '';
 
-            // 匹配“unlock alias”或“lock alias”
-            const unlockPattern = /unlock\s+(\S+)/;
-            const lockPattern = /lock\s+(\S+)/;
+      // 匹配“锁库 分支名”或“开闸 分支名”
+      const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/;
+      const lockUnlockMatch = textContent.match(lockUnlockPattern);
 
-            // 匹配“unlock alias @user1 @user2 ...”
-            const disposableWhitelistPattern = /unlock\s+(\S+)\s+@(\S+(?:\s+@\S+)*)/;
+      // 匹配“一次性 分支名 用户名”
+      const disposableWhitelistPattern = /一次性\s+(\S+)\s+(\S+)/;
+      const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
 
-            const unlockMatch = textContent.match(unlockPattern);
-            const lockMatch = textContent.match(lockPattern);
-            const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
+      // 匹配“永久 分支名 用户名”
+      const permanentWhitelistPattern = /永久\s+(\S+)\s+(\S+)/;
+      const permanentWhitelistMatch = textContent.match(permanentWhitelistPattern);
 
-            if (unlockMatch) {
-                // 解锁分支逻辑
-                const branchIdentifier = unlockMatch[1]; // 分支名称或别名
-                const success = await updateBranchLockStatus(branchIdentifier, 0);
-                let replyMessage = '';
-                if (success) {
-                    replyMessage = `已成功解锁分支 ${branchIdentifier}`;
-                } else {
-                    replyMessage = `解锁分支 ${branchIdentifier} 失败，请检查分支是否存在`;
-                }
-                return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
-            } else if (lockMatch) {
-                // 锁定分支逻辑
-                const branchIdentifier = lockMatch[1]; // 分支名称或别名
-                const success = await updateBranchLockStatus(branchIdentifier, 1);
-                let replyMessage = '';
-                if (success) {
-                    replyMessage = `已成功锁定分支 ${branchIdentifier}`;
-                } else {
-                    replyMessage = `锁定分支 ${branchIdentifier} 失败，请检查分支是否存在`;
-                }
-                return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
-            } else if (disposableWhitelistMatch) {
-                // 添加一次性白名单逻辑
-                const branchIdentifier = disposableWhitelistMatch[1]; // 分支名称或别名
-                const whitelistUsers = disposableWhitelistMatch[2].split(/\s+@/); // 获取所有被@的用户名
+      if (lockUnlockMatch) {
+        // 处理分支锁定/解锁逻辑
+        const action = lockUnlockMatch[1]; // "锁库" 或 "开闸"
+        const branchIdentifier = lockUnlockMatch[2]; // 分支名称或别名
 
-                // 检查发起请求的人是否在永久白名单中
-                const checkQuery = 'SELECT svn_lock_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
-                const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
+        // 根据动作设置锁定状态
+        const svn_lock_status = action === '锁库' ? 1 : 0;
 
-                if (checkResults.length === 0) {
-                    logger.info(`分支 ${branchIdentifier} 不存在，无法增加一次性白名单`);
-                    return res.status(200).json({ msgtype: 'text', text: { content: `分支 ${branchIdentifier} 不存在，无法增加一次性白名单` } });
-                }
+        // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
+        const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
 
-                const currentWhitelist = checkResults[0].svn_lock_whitelist || '';
-                const whitelistArray = currentWhitelist.split(',').filter(Boolean);
-
-                if (!whitelistArray.includes(body.user_name)) {
-                    return res.status(200).json({ msgtype: 'text', text: { content: '您不在永久白名单里' } });
-                }
-
-                for (const whitelistUser of whitelistUsers) {
-                    const success = await addDisposableWhitelist(branchIdentifier, whitelistUser.trim());
-                    if (!success) {
-                        return res.status(200).json({ msgtype: 'text', text: { content: `为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser} 失败，请检查分支或用户信息` } });
-                    }
-                }
-                return res.status(200).json({ msgtype: 'text', text: { content: `已成功为分支 ${branchIdentifier} 增加一次性白名单用户${whitelistUsers.join('、')}` } });
-            }
-
-            // 如果没有匹配到任何指令，返回默认消息
-            return res.status(200).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
-        } else if (body.user_name && body.operation_kind && body.event_type) {
-            // 处理 Web 钩子请求
-            const result = await handleWebhookRequest(body);
-            return res.status(result.status).json(result);
+        // 构造回复消息
+        let replyMessage = '';
+        if (success) {
+          replyMessage = `已成功${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier}`;
         } else {
-            // 未知请求类型
-            return res.status(400).json({ status: 400, message: "Unknown request type." });
+          replyMessage = `${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier} 失败，请检查分支是否存在`;
         }
-    } catch (error) {
-        logger.error(error.message);
-        return res.status(500).json({ status: 500, message: error.message });
+
+        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
+      } else if (disposableWhitelistMatch) {
+        // 处理增加一次性白名单逻辑
+        const branchIdentifier = disposableWhitelistMatch[1]; // 分支名称或别名
+        const whitelistUser = disposableWhitelistMatch[2]; // 白名单用户
+
+        // 调用增加一次性白名单逻辑，支持通过分支名称或别名操作
+        const success = await addDisposableWhitelist(branchIdentifier, whitelistUser);
+
+        // 构造回复消息
+        let replyMessage = '';
+        if (success) {
+          replyMessage = `已成功为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser}`;
+        } else {
+          replyMessage = `为分支 ${branchIdentifier} 增加一次性白名单用户 ${whitelistUser} 失败，请检查分支或用户信息`;
+        }
+
+        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
+      } else if (permanentWhitelistMatch) {
+        // 处理增加永久白名单逻辑
+        const branchIdentifier = permanentWhitelistMatch[1]; // 分支名称或别名
+        const whitelistUser = permanentWhitelistMatch[2]; // 白名单用户
+
+        // 调用增加永久白名单逻辑，支持通过分支名称或别名操作
+        const success = await addPermanentWhitelist(branchIdentifier, whitelistUser);
+
+        // 构造回复消息
+        let replyMessage = '';
+        if (success) {
+          replyMessage = `已成功为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser}`;
+        } else {
+          replyMessage = `为分支 ${branchIdentifier} 增加永久白名单用户 ${whitelistUser} 失败，请检查分支或用户信息`;
+        }
+
+        return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
+      } else {
+        // 如果没有匹配到任何指令，返回默认消息
+        return res.status(200).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
+      }
+    } else if (body.user_name && body.paths) {
+      // 处理 Web 钩子请求
+      const result = await handleWebhookRequest(body);
+      return res.status(result.status).json(result);
+    } else {
+      // 未知请求类型
+      return res.status(400).json({ status: 400, message: "Unknown request type." });
     }
+  } catch (error) {
+    logger.error(`处理请求时发生错误：${error.message}`);
+    return res.status(500).json({ status: 500, message: error.message });
+  }
 });
 
 // 启动服务器
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    logger.info(`Server is running on port ${PORT}`);
+  logger.info(`Server is running on port ${PORT}`);
 });
