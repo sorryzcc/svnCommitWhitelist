@@ -239,7 +239,7 @@ app.post('/', async (req, res) => {
           const whitelistUsers = svnLockWhitelist.split(',').map(user => user.trim());
           if (!whitelistUsers.includes(userAlias)) {
             logger.info(`请求者 ${userAlias} 不在永久白名单中`);
-            return res.status(403).json({
+            return res.status(200).json({
               msgtype: 'text',
               text: { content: '您不在永久白名单内，无权增加一次性白名单' }
             });
