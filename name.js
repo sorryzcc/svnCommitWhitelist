@@ -212,45 +212,32 @@ app.post('/', async (req, res) => {
         // 处理机器人请求
         const textContent = body.text?.content || '';
   
-        // 匹配“锁库 分支名”或“开闸 分支名”（支持中英文）
-        const lockUnlockPattern = /(锁库|开闸|lock|unlock)\s+(\S+)/i; // 支持中英文指令
-        const lockUnlockMatch = textContent.match(lockUnlockPattern);
-        logger.info(`解析机器人指令：${lockUnlockMatch ? '匹配成功' : '匹配失败'}`);
+        // 匹配一次性白名单指令
+        const unlockDisposablePattern = /(unlock|开闸)\s+(\S+)\s+@(\S+)$([^)]+)$/i;
+        const unlockDisposableMatch = textContent.match(unlockDisposablePattern);
+        logger.info(`解析一次性白名单指令：${unlockDisposableMatch ? '匹配成功' : '匹配失败'}`);
   
-        if (lockUnlockMatch) {
-          logger.info(`匹配到分支操作指令：动作=${lockUnlockMatch[1]}, 分支标识=${lockUnlockMatch[2]}`);
+        if (unlockDisposableMatch) {
+          logger.info(`匹配到一次性白名单指令：分支=${unlockDisposableMatch[2]}, 用户标识=${unlockDisposableMatch[3]}, 用户名=${unlockDisposableMatch[4]}`);
   
-          const actionMap = {
-            '锁库': 1,
-            '开闸': 0,
-            'lock': 1,
-            'unlock': 0,
-          };
+          const branchIdentifier = unlockDisposableMatch[2].trim(); // 分支名称或别名
+          const userAlias = unlockDisposableMatch[3].trim(); // 用户标识（如 v_zccgzhang）
+          const userName = unlockDisposableMatch[4].trim(); // 用户名（如 张匆匆）
   
-          const action = lockUnlockMatch[1].toLowerCase(); // 动作关键字
-          const branchIdentifier = lockUnlockMatch[2].trim(); // 分支名称或别名
-  
-          // 根据动作设置锁定状态
-          const svn_lock_status = actionMap[action];
-          if (svn_lock_status === undefined) {
-            logger.error(`未知的动作：${action}`);
-            return res.status(400).json({ msgtype: 'text', text: { content: '未知的操作，请使用“锁库/开闸”或“lock/unlock”。' } });
-          }
-  
-          // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
-          const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
+          // 调用一次性白名单更新逻辑
+          const success = await addDisposableWhitelist(branchIdentifier, userAlias);
   
           // 构造回复消息
           let replyMessage = '';
           if (success) {
-            replyMessage = `已成功${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier}`;
+            replyMessage = `已成功为用户 ${userName}(${userAlias}) 添加一次性白名单权限到分支 ${branchIdentifier}`;
           } else {
-            replyMessage = `${svn_lock_status === 1 ? '锁定' : '解锁'}分支 ${branchIdentifier} 失败，请检查分支是否存在`;
+            replyMessage = `为用户 ${userName}(${userAlias}) 添加一次性白名单权限失败，请检查分支是否存在`;
           }
   
           return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
         } else {
-          logger.info('未匹配到分支操作指令');
+          logger.info('未匹配到一次性白名单指令');
           return res.status(400).json({ msgtype: 'text', text: { content: '未识别的指令，请重新输入。' } });
         }
       } else if (body.user_name && body.paths) {
