@@ -212,8 +212,8 @@ app.post('/', async (req, res) => {
         // 处理机器人请求
         const textContent = body.text?.content || '';
   
-        // 匹配“锁库 分支名”或“开闸 分支名”
-        const lockUnlockPattern = /(锁库|开闸)\s+(\S+)/;
+        // 匹配“lock 分支名”或“unlock 分支名”
+        const lockUnlockPattern = /(lock|unlock)\s+(\S+)/;
         const lockUnlockMatch = textContent.match(lockUnlockPattern);
   
         // 匹配“一次性 分支名 用户名”
@@ -226,11 +226,11 @@ app.post('/', async (req, res) => {
   
         if (lockUnlockMatch) {
           // 处理分支锁定/解锁逻辑
-          const action = lockUnlockMatch[1]; // "锁库" 或 "开闸"
+          const action = lockUnlockMatch[1]; // "lock" 或 "unlock"
           const branchIdentifier = lockUnlockMatch[2]; // 分支名称或别名
   
           // 根据动作设置锁定状态
-          const svn_lock_status = action === '锁库' ? 1 : 0;
+          const svn_lock_status = action === 'lock' ? 1 : 0;
   
           // 调用分支锁定/解锁逻辑，支持通过分支名称或别名操作
           const success = await updateBranchLockStatus(branchIdentifier, svn_lock_status);
