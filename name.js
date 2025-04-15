@@ -211,6 +211,7 @@ app.post('/', async (req, res) => {
       if (body.from && body.webhook_url) {
         // 处理机器人请求
         const textContent = body.text?.content || '';
+        const userAlias = body.from.alias; // 请求者的 alias
   
         // 匹配一次性白名单指令
         const unlockDisposablePattern = /(unlock|开闸)\s+(\S+)\s+@(\S+)(?:$([^)]+)$)?/i;
@@ -218,11 +219,9 @@ app.post('/', async (req, res) => {
         logger.info(`解析一次性白名单指令：${unlockDisposableMatch ? '匹配成功' : '匹配失败'}`);
   
         if (unlockDisposableMatch) {
-          logger.info(`匹配到一次性白名单指令：分支=${unlockDisposableMatch[2]}, 用户标识=${unlockDisposableMatch[3]}, 用户名=${unlockDisposableMatch[4]}`);
-  
           const branchIdentifier = unlockDisposableMatch[2].trim(); // 分支名称或别名
-          const userAlias = unlockDisposableMatch[3].trim(); // 用户标识（如 v_zccgzhang 或 CI-Notice）
-          const userName = unlockDisposableMatch[4]?.trim() || ''; // 用户名（可选）
+          const targetUserAlias = unlockDisposableMatch[3].trim(); // 目标用户标识
+          const targetUserName = unlockDisposableMatch[4]?.trim() || ''; // 目标用户名（可选）
   
           // 查询分支信息
           const queryBranch = 'SELECT * FROM tb_branch_info WHERE LOWER(alias) = ? OR LOWER(svn_branch_name) LIKE ?';
@@ -234,16 +233,24 @@ app.post('/', async (req, res) => {
           }
   
           const branchInfo = rows[0];
+          const svnLockWhitelist = branchInfo.svn_lock_whitelist || ''; // 获取永久白名单字段
+  
+          // 检查请求者的 alias 是否在永久白名单中
+          const whitelistUsers = svnLockWhitelist.split(',').map(user => user.trim());
+          if (!whitelistUsers.includes(userAlias)) {
+            logger.info(`请求者 ${userAlias} 不在永久白名单中`);
+            return res.status(403).json({ msgtype: 'text', text: { content: '您不在永久白名单内，无权增加一次性白名单' } });
+          }
   
           // 调用一次性白名单更新逻辑
-          const success = await addDisposableWhitelist(branchInfo.svn_branch_name, userAlias);
+          const success = await addDisposableWhitelist(branchInfo.svn_branch_name, targetUserAlias);
   
           // 构造回复消息
           let replyMessage = '';
           if (success) {
-            replyMessage = `已成功为用户 ${userName ? `${userName}(${userAlias})` : userAlias} 添加一次性白名单权限到分支 ${branchIdentifier}`;
+            replyMessage = `已成功为用户 ${targetUserName ? `${targetUserName}(${targetUserAlias})` : targetUserAlias} 添加一次性白名单权限到分支 ${branchIdentifier}`;
           } else {
-            replyMessage = `为用户 ${userName ? `${userName}(${userAlias})` : userAlias} 添加一次性白名单权限失败，请检查分支是否存在`;
+            replyMessage = `为用户 ${targetUserName ? `${targetUserName}(${targetUserAlias})` : targetUserAlias} 添加一次性白名单权限失败，请检查分支是否存在`;
           }
   
           return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
