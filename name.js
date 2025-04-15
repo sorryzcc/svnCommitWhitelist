@@ -241,7 +241,7 @@ app.post('/', async (req, res) => {
             logger.info(`请求者 ${userAlias} 不在永久白名单中`);
             return res.status(200).json({
               msgtype: 'text',
-              text: { content: '您不在永久白名单内，无权增加一次性白名单' }
+              text: { content: `${userAlias}不在永久白名单内，无权增加一次性白名单` }
             });
           }
   
