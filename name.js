@@ -271,11 +271,18 @@ app.post('/', async (req, res) => {
         return res.status(result.status).json(result);
       } else {
         // 未知请求类型
-        return res.status(400).json({ status: 400, message: "Unknown request type." });
+        logger.warn('接收到未知类型的请求');
+        return res.status(400).json({
+          msgtype: 'text',
+          text: { content: '未知请求类型，请检查输入内容。' }
+        });
       }
     } catch (error) {
       logger.error(`处理请求时发生错误：${error.message}`);
-      return res.status(500).json({ status: 500, message: error.message });
+      return res.status(500).json({
+        msgtype: 'text',
+        text: { content: `服务器内部错误：${error.message}` }
+      });
     }
   });
 
