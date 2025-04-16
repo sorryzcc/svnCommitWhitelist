@@ -1,2 +1,0 @@
-在上面的代码中增加 增加svn_lock_disposable_whitelist命令
-例如：branches/Mainland/PUB/Mainland_Pub_Beta02_Release分支增加一次性白名单v_zccgzhang
