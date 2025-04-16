@@ -123,7 +123,7 @@ app.post('/', async (req, res) => {
                 return res.status(200).json({
                     msgtype: 'text',
                     text: {
-                        content: `未识别的指令，请重新输入。\n示例：\n@svn机器人 lock b02rel\n@svn机器人 unlockall b02rel\n@svn机器人 unlock b02rel @v_zccgzhang(张匆匆)`
+                        content: `未识别的指令，请重新输入。\n示例：\n lock b02rel\n unlockall b02rel\n unlock b02rel @v_zccgzhang(张匆匆)`
                     }
                 });
             }
