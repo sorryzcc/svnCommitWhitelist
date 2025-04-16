@@ -76,6 +76,97 @@ async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
     }
 }
 
+// 处理 Web 钩子请求的函数
+async function handleWebhookRequest(reqBody) {
+    const { user_name, paths } = reqBody;
+  
+    if (!Array.isArray(paths) || paths.length === 0) {
+      return { status: 200, message: "No branches to check, allowing commit." };
+    }
+  
+    const conn = await pool.getConnection();
+    try {
+      // 查询 tb_branch_info 表，获取所有分支信息
+      const [branchRows] = await conn.execute('SELECT * FROM tb_branch_info');
+      logger.info(`从数据库中查询到的分支信息：${JSON.stringify(branchRows)}`);
+  
+      let hasMatchingBranch = false; // 标记是否有匹配的分支
+      let responseMessages = []; // 存储所有分支的响应消息
+  
+      for (const branch of branchRows) {
+        const {
+          svn_branch_name,
+          alias,
+          svn_lock_status,
+          svn_lock_whitelist,
+          svn_lock_disposable_whitelist
+        } = branch;
+  
+        // 检查当前分支是否在请求的 paths 中
+        const isBranchIncluded = paths.some(path => path.includes(svn_branch_name) || path.includes(alias));
+        if (!isBranchIncluded) {
+          logger.info(`分支 "${svn_branch_name}" (${alias}) 不在请求的 paths 中，跳过检查`);
+          continue; // 如果当前分支不在请求的 paths 中，跳过
+        }
+  
+        hasMatchingBranch = true; // 标记有匹配的分支
+        logger.info(`正在检查分支 "${svn_branch_name}" (${alias}) 的锁定状态`);
+  
+        // 如果 svn_lock_status 为 0，直接允许提交
+        if (svn_lock_status === 0) {
+          responseMessages.push(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 0，允许提交`);
+          logger.info(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 0，允许提交`);
+          continue;
+        }
+  
+        // 检查 svn_lock_whitelist 是否包含 user_name
+        if (svn_lock_whitelist.split(',').filter(Boolean).includes(user_name)) {
+          responseMessages.push(`用户 "${user_name}" 在永久白名单中，允许提交分支 "${svn_branch_name}" (${alias})`);
+          logger.info(`用户 "${user_name}" 在永久白名单中，允许提交分支 "${svn_branch_name}" (${alias})`);
+          continue;
+        }
+  
+        // 检查 svn_lock_disposable_whitelist 是否包含 user_name
+        const disposableWhitelistArray = svn_lock_disposable_whitelist.split(',').filter(Boolean);
+        const index = disposableWhitelistArray.indexOf(user_name);
+        if (index !== -1) {
+          disposableWhitelistArray.splice(index, 1); // 移除用户
+          const updatedWhitelist = disposableWhitelistArray.join(',');
+  
+          // 更新数据库
+          await conn.execute(
+            'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?',
+            [updatedWhitelist, svn_branch_name, alias]
+          );
+  
+          responseMessages.push(`用户 "${user_name}" 在一次性白名单中，已移除并允许提交分支 "${svn_branch_name}" (${alias})`);
+          logger.info(`用户 "${user_name}" 在一次性白名单中，已移除并允许提交分支 "${svn_branch_name}" (${alias})`);
+          continue;
+        }
+  
+        // 如果以上条件都不满足，则拒绝提交
+        responseMessages.push(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 1，且用户 "${user_name}" 不在白名单中，拒绝提交`);
+        logger.error(`分支 "${svn_branch_name}" (${alias}) 锁定状态为 1，且用户 "${user_name}" 不在白名单中，拒绝提交`);
+        return { status: 500, message: `提交被拒绝：分支 "${svn_branch_name}" (${alias}) 已锁定，且用户 "${user_name}" 不在白名单中。` };
+      }
+  
+      // 如果没有任何匹配的分支，直接允许提交
+      if (!hasMatchingBranch) {
+        logger.info("没有匹配的分支，允许提交");
+        return { status: 200, message: "No matching branches found, allowing commit." };
+      }
+  
+      // 返回所有分支的响应消息
+      logger.info(`所有分支的响应消息：${responseMessages}`);
+      return { status: 200, messages: responseMessages };
+    } catch (error) {
+      logger.error(`处理 Web 钩子请求时发生错误：${error.message}`);
+      return { status: 500, message: error.message };
+    } finally {
+      conn.release();
+    }
+  }
+
 // POST 路由处理函数
 app.post('/', async (req, res) => {
     try {
