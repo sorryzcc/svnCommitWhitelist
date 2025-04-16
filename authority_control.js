@@ -85,20 +85,27 @@ app.post('/', async (req, res) => {
         // 判断是机器人请求还是 Web 钩子请求
         if (body.from && body.webhook_url) {
             // 处理机器人请求
-            const textContent = body.text?.content || '';
+            let textContent = body.text?.content || '';
+            logger.info(`Text Content Received: ${textContent}`);
+
+            // 去掉指令前的“@svn机器人”部分
+            textContent = textContent.replace(/^@svn机器人\s*/, '').trim();
+            logger.info(`Processed Text Content: ${textContent}`);
+
             const userAlias = body.from.alias; // 请求者的 alias
 
             // 匹配“锁库 分支名”指令
-            const lockPattern = /lock\s+(\S+)/;
+            const lockPattern = /^lock\s+(\S+)/;
             const lockMatch = textContent.match(lockPattern);
 
             // 匹配“开闸 分支名”指令
-            const unlockAllPattern = /unlockall\s+(\S+)/;
+            const unlockAllPattern = /^unlockall\s+(\S+)/;
             const unlockAllMatch = textContent.match(unlockAllPattern);
 
             // 匹配“增加一次性白名单 分支名 用户名”指令
-            const disposableWhitelistPattern = /unlock\s+(\S+)\s+@(\S+)(?:$([^)]+)$)?/;
+            const disposableWhitelistPattern = /^unlock\s+(\S+)\s+@(\S+)(?:$([^)]+)$)?/;
             const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
+            logger.info(`Lock Match: ${JSON.stringify(lockMatch)}, UnlockAll Match: ${JSON.stringify(unlockAllMatch)}, DisposableWhitelist Match: ${JSON.stringify(disposableWhitelistMatch)}`);
 
             // 查询请求者的永久白名单权限
             const checkPermissionQuery = 'SELECT svn_lock_whitelist FROM tb_branch_info WHERE svn_lock_whitelist LIKE ? LIMIT 1';
@@ -106,10 +113,10 @@ app.post('/', async (req, res) => {
 
             if (permissionResults.length === 0) {
                 logger.info(`请求者 ${userAlias} 不在任何分支的永久白名单中，无权操作`);
-                return res.status(200).json({
+                return res.status(403).json({
                     msgtype: 'text',
                     text: {
-                        content: `${userAlias} 不在永久白名单内，无权执行此操作。`
+                        content: `${userAlias} 不在永久白名单内，无权执行此操作。\n示例：\n@svn机器人 lock b02rel\n@svn机器人 unlockall b02rel\n@svn机器人 unlock b02rel @v_zccgzhang(张匆匆)`
                     }
                 });
             }
@@ -117,34 +124,18 @@ app.post('/', async (req, res) => {
             if (lockMatch) {
                 // 处理分支锁定逻辑
                 const branchIdentifier = lockMatch[1].trim(); // 分支名称或别名
-
-                // 设置锁定状态为 1（锁定）
                 const success = await updateBranchLockStatus(branchIdentifier, 1);
-
-                // 构造回复消息
-                let replyMessage = '';
-                if (success) {
-                    replyMessage = `已成功锁定分支 ${branchIdentifier}`;
-                } else {
-                    replyMessage = `锁定分支 ${branchIdentifier} 失败，请检查分支是否存在`;
-                }
-
+                const replyMessage = success
+                    ? `已成功锁定分支 ${branchIdentifier}`
+                    : `锁定分支 ${branchIdentifier} 失败，请检查分支是否存在`;
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
             } else if (unlockAllMatch) {
                 // 处理分支解锁逻辑
                 const branchIdentifier = unlockAllMatch[1].trim(); // 分支名称或别名
-
-                // 设置锁定状态为 0（解锁）
                 const success = await updateBranchLockStatus(branchIdentifier, 0);
-
-                // 构造回复消息
-                let replyMessage = '';
-                if (success) {
-                    replyMessage = `已成功解锁分支 ${branchIdentifier}`;
-                } else {
-                    replyMessage = `解锁分支 ${branchIdentifier} 失败，请检查分支是否存在`;
-                }
-
+                const replyMessage = success
+                    ? `已成功解锁分支 ${branchIdentifier}`
+                    : `解锁分支 ${branchIdentifier} 失败，请检查分支是否存在`;
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
             } else if (disposableWhitelistMatch) {
                 // 处理增加一次性白名单逻辑
