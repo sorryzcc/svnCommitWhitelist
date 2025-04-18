@@ -46,48 +46,51 @@ async function updateBranchLockStatus(branchIdentifier, svn_lock_status) {
 }
 
 // 增加一次性白名单的函数
-async function addDisposableWhitelist(branchIdentifier, textContent) {
+async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
     const checkQuery = 'SELECT svn_lock_disposable_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
     try {
-        // 查询分支是否存在及当前白名单内容
         const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
         if (checkResults.length === 0) {
             logger.info(`分支 ${branchIdentifier} 不存在，无法增加一次性白名单`);
             return false;
         }
-
-        // 打印原始输入内容（调试）
-        logger.info(`原始输入内容: ${textContent}`);
-
-        // 字符串处理：提取所有用户标识
-        const words = textContent.split(/\s+/); // 按空格分割
-        const matches = words
-            .filter(word => word.startsWith('@') && word.includes('(') && word.includes(')')) // 过滤出形如 @用户名(中文名) 的部分
-            .map(word => word.slice(1).split('(')[0].trim()); // 提取用户名部分
-        logger.info(`提取的所有用户标识: ${JSON.stringify(matches)}`);
-
-        // 合并新用户标识到现有白名单中，并去重
+  
+        // 打印调试信息
+        logger.info(`原始用户标识: ${whitelistUser}`);
+        logger.info(`原始用户标识的字符拆解: ${[...whitelistUser].map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}`);
+  
+        // 检查正则表达式的匹配结果
+        const regex = /[$（].*?[$）]/g;
+        const matches = whitelistUser.match(regex);
+        logger.info(`正则表达式匹配结果: ${JSON.stringify(matches)}`);
+  
+        // 清理用户标识，去掉圆括号及其内容（支持半角和全角括号）
+        const cleanedWhitelistUser = whitelistUser.replace(/[^a-zA-Z0-9_]/g, '').trim();
+        logger.info(`清理后的用户标识: ${cleanedWhitelistUser}`);
+  
         let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
-        const whitelistArray = currentWhitelist.split(',').filter(Boolean); // 当前白名单数组
-        const updatedWhitelistArray = [...new Set([...whitelistArray, ...matches])]; // 合并并去重
-        const updatedWhitelist = updatedWhitelistArray.join(','); // 转换为逗号分隔的字符串
-
-        // 更新数据库
+        const whitelistArray = currentWhitelist.split(',').filter(Boolean);
+  
+  
+        whitelistArray.push(cleanedWhitelistUser);
+  
+  
+        const updatedWhitelist = whitelistArray.join(',');
         const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
         const [updateResults] = await pool.execute(updateQuery, [updatedWhitelist, branchIdentifier, branchIdentifier]);
-
+  
         if (updateResults.affectedRows > 0) {
-            logger.info(`成功为分支 ${branchIdentifier} 增加一次性白名单用户: ${updatedWhitelist}`);
+            logger.info(`成功为分支 ${branchIdentifier} 增加一次性白名单用户 ${cleanedWhitelistUser}`);
             return true;
         } else {
-            logger.info(`未能为分支 ${branchIdentifier} 增加一次性白名单用户`);
+            logger.info(`未能为分支 ${branchIdentifier} 增加一次性白名单用户 ${cleanedWhitelistUser}`);
             return false;
         }
     } catch (error) {
         logger.error(`增加一次性白名单失败：${error.message}`);
         throw error;
     }
-}
+  }
 
 // 处理 Web 钩子请求的函数
 async function handleWebhookRequest(reqBody) {
