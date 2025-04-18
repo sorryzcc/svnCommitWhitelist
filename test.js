@@ -46,7 +46,7 @@ async function updateBranchLockStatus(branchIdentifier, svn_lock_status) {
 }
 
 // 增加一次性白名单的函数
-async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
+async function addDisposableWhitelist(branchIdentifier, whitelistUsers) {
     const checkQuery = 'SELECT svn_lock_disposable_whitelist FROM tb_branch_info WHERE svn_branch_name = ? OR alias = ?';
     try {
         const [checkResults] = await pool.execute(checkQuery, [branchIdentifier, branchIdentifier]);
@@ -54,43 +54,45 @@ async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
             logger.info(`分支 ${branchIdentifier} 不存在，无法增加一次性白名单`);
             return false;
         }
-  
-        // 打印调试信息
-        logger.info(`原始用户标识: ${whitelistUser}`);
-        logger.info(`原始用户标识的字符拆解: ${[...whitelistUser].map(c => `${c} (${c.charCodeAt(0)})`).join(', ')}`);
-  
-        // 检查正则表达式的匹配结果
-        const regex = /[$（].*?[$）]/g;
-        const matches = whitelistUser.match(regex);
-        logger.info(`正则表达式匹配结果: ${JSON.stringify(matches)}`);
-  
-        // 清理用户标识，去掉圆括号及其内容（支持半角和全角括号）
-        const cleanedWhitelistUser = whitelistUser.replace(/[^a-zA-Z0-9_]/g, '').trim();
-        logger.info(`清理后的用户标识: ${cleanedWhitelistUser}`);
-  
+
+        // 获取当前白名单内容
         let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
-        const whitelistArray = currentWhitelist.split(',').filter(Boolean);
-  
-  
-        whitelistArray.push(cleanedWhitelistUser);
-  
-  
+        const whitelistArray = currentWhitelist.split(',').filter(Boolean); // 转换为数组并去除空值
+        logger.info(`当前白名单内容: ${JSON.stringify(whitelistArray)}`);
+
+        // 拆分输入的用户标识（支持逗号分隔）
+        const userArray = whitelistUsers.split(',').map(user => user.trim()); // 按逗号分割并去除多余空格
+        logger.info(`输入的用户标识列表: ${JSON.stringify(userArray)}`);
+
+        // 清理每个用户标识，去掉圆括号及其内容（支持半角和全角括号）
+        const cleanedUserArray = userArray.map(user => {
+            const cleanedUser = user.replace(/[$（].*?[$）]/g, '').trim(); // 去掉圆括号及其内容
+            return cleanedUser.replace(/[^a-zA-Z0-9_]/g, ''); // 只保留字母、数字和下划线
+        });
+        logger.info(`清理后的用户标识列表: ${JSON.stringify(cleanedUserArray)}`);
+
+        // 将清理后的用户标识添加到白名单数组
+        cleanedUserArray.forEach(user => {
+                whitelistArray.push(user);
+        });
+
+        // 更新白名单内容
         const updatedWhitelist = whitelistArray.join(',');
         const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
         const [updateResults] = await pool.execute(updateQuery, [updatedWhitelist, branchIdentifier, branchIdentifier]);
-  
+
         if (updateResults.affectedRows > 0) {
-            logger.info(`成功为分支 ${branchIdentifier} 增加一次性白名单用户 ${cleanedWhitelistUser}`);
+            logger.info(`成功为分支 ${branchIdentifier} 增加一次性白名单用户: ${cleanedUserArray.join(', ')}`);
             return true;
         } else {
-            logger.info(`未能为分支 ${branchIdentifier} 增加一次性白名单用户 ${cleanedWhitelistUser}`);
+            logger.info(`未能为分支 ${branchIdentifier} 增加一次性白名单用户: ${cleanedUserArray.join(', ')}`);
             return false;
         }
     } catch (error) {
         logger.error(`增加一次性白名单失败：${error.message}`);
         throw error;
     }
-  }
+}
 
 // 处理 Web 钩子请求的函数
 async function handleWebhookRequest(reqBody) {
