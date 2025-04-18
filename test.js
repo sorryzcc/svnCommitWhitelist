@@ -287,12 +287,20 @@ app.post('/', async (req, res) => {
             } else if (disposableWhitelistMatch) {
                 const usersPart = disposableWhitelistMatch[2].trim(); // 获取用户标识部分
 
+                // 提取用户标识
+                const words = usersPart.split(/\s+/); // 按空格分割
+                const matches = words
+                    .filter(word => word.startsWith('@') && word.includes('(') && word.includes(')')) // 筛选符合条件的单词
+                    .map(word => word.slice(1).split('(')[0].trim()); // 提取用户名部分
+                logger.info(`提取的所有用户标识: ${JSON.stringify(matches)}`);
+
                 // 调用增加一次性白名单逻辑
-                const success = await addDisposableWhitelist(branchIdentifier, usersPart);
+                const success = await addDisposableWhitelist(branchIdentifier, matches.join(','));
 
                 // 构造回复消息
+                const addedUsers = matches.join(', '); // 将用户标识用逗号分隔
                 const replyMessage = success
-                    ? `已成功为分支 ${branchIdentifier} 增加一次性白名单用户`
+                    ? `已成功为分支 ${branchIdentifier} 增加一次性白名单用户：${addedUsers}`
                     : `为分支 ${branchIdentifier} 增加一次性白名单用户失败，请检查分支或用户信息`;
 
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
