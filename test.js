@@ -71,10 +71,9 @@ async function addDisposableWhitelist(branchIdentifier, whitelistUser) {
       let currentWhitelist = checkResults[0].svn_lock_disposable_whitelist || '';
       const whitelistArray = currentWhitelist.split(',').filter(Boolean);
 
-      // 如果用户已经存在，跳过添加
-      if (!whitelistArray.includes(cleanedWhitelistUser)) {
-          whitelistArray.push(cleanedWhitelistUser);
-      }
+
+      whitelistArray.push(cleanedWhitelistUser);
+
 
       const updatedWhitelist = whitelistArray.join(',');
       const updateQuery = 'UPDATE tb_branch_info SET svn_lock_disposable_whitelist = ? WHERE svn_branch_name = ? OR alias = ?';
