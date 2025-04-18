@@ -180,11 +180,50 @@ app.post('/', async (req, res) => {
 
             const userAlias = body.from.alias; // 请求者的 alias
 
-            // 提取分支标识符（假设所有指令都包含分支名）
-            const branchPattern = /^(lock|unlockall|unlock)\s+(\S+)/;
+            // **第一步：查询所有分支的永久白名单**
+            const checkAllPermissionsQuery = `
+                SELECT alias, svn_lock_whitelist 
+                FROM tb_branch_info
+            `;
+            const [allPermissionResults] = await pool.execute(checkAllPermissionsQuery);
+
+            // 将所有分支的白名单信息存储为一个对象，方便快速查找
+            const allWhitelists = {};
+            for (const row of allPermissionResults) {
+                allWhitelists[row.alias] = row.svn_lock_whitelist.split(',').map(item => item.trim());
+            }
+            logger.info(`Parsed All Whitelists: ${JSON.stringify(allWhitelists)}`);
+
+            // **第二步：检查用户是否在任意分支的白名单中**
+            let isUserInAnyWhitelist = false;
+            let branchIdentifier = null;
+
+            for (const [alias, whitelistArray] of Object.entries(allWhitelists)) {
+                if (whitelistArray.includes(userAlias)) {
+                    isUserInAnyWhitelist = true;
+                    branchIdentifier = alias; // 记录用户所在的分支
+                    break;
+                }
+            }
+
+            // 如果用户不在任何分支的白名单中，直接返回错误消息
+            if (!isUserInAnyWhitelist) {
+                logger.info(`请求者 ${userAlias} 不在任何分支的永久白名单中，无权操作`);
+                return res.status(200).json({
+                    msgtype: 'text',
+                    text: {
+                        content: `${userAlias} 不在任何分支的永久白名单内，无权执行此操作。`
+                    }
+                });
+            }
+
+            logger.info(`请求者 ${userAlias} 在分支 ${branchIdentifier} 的永久白名单中`);
+
+            // **第三步：提取分支标识符**
+            const branchPattern = /^(\S+)/;
             const branchMatch = textContent.match(branchPattern);
 
-            // 如果没有匹配到分支标识符，返回默认消息
+            // 如果没有匹配到分支标识符，直接返回错误消息
             if (!branchMatch) {
                 return res.status(200).json({
                     msgtype: 'text',
@@ -194,50 +233,37 @@ app.post('/', async (req, res) => {
                 });
             }
 
-            const branchIdentifier = branchMatch[2].trim(); // 分支标识符
+            const extractedBranchIdentifier = branchMatch[0].trim(); // 提取的分支标识符
+            logger.info(`Extracted Branch Identifier: ${extractedBranchIdentifier}`);
 
-            // 查询当前分支的永久白名单
-            const checkPermissionQuery = `
-                SELECT svn_lock_whitelist 
-                FROM tb_branch_info 
-                WHERE alias = ?
-                LIMIT 1
-            `;
-            const [permissionResults] = await pool.execute(checkPermissionQuery, [branchIdentifier]);
-
-            if (permissionResults.length === 0) {
-                logger.info(`分支 ${branchIdentifier} 不存在`);
+            // 检查提取的分支是否与用户所在分支一致
+            if (extractedBranchIdentifier !== branchIdentifier) {
+                logger.info(`请求者 ${userAlias} 尝试操作非所属分支 ${extractedBranchIdentifier}`);
                 return res.status(200).json({
                     msgtype: 'text',
                     text: {
-                        content: `分支 ${branchIdentifier} 不存在，请检查分支名称是否正确。`
-                    }
-                });
-            }
-
-            const whitelist = permissionResults[0].svn_lock_whitelist;
-            logger.info(`Raw Whitelist Content for Branch ${branchIdentifier}: ${whitelist}`);
-
-            // 将白名单分割为数组并去除多余空格
-            const whitelistArray = whitelist.split(',').map(item => item.trim());
-            logger.info(`Parsed Whitelist Array for Branch ${branchIdentifier}: ${JSON.stringify(whitelistArray)}`);
-
-            // 检查用户是否在白名单中
-            if (!whitelistArray.includes(userAlias)) {
-                logger.info(`请求者 ${userAlias} 不在分支 ${branchIdentifier} 的永久白名单中，无权操作`);
-                return res.status(200).json({
-                    msgtype: 'text',
-                    text: {
-                        content: `${userAlias} 不在分支 ${branchIdentifier} 的永久白名单内，无权执行此操作。`
+                        content: `${userAlias} 仅允许操作分支 ${branchIdentifier}，无法操作分支 ${extractedBranchIdentifier}。`
                     }
                 });
             }
 
             // 用户在白名单中，继续解析指令
-            const command = branchMatch[1].trim(); // 指令类型
-            logger.info(`Command Type: ${command}, Branch Identifier: ${branchIdentifier}`);
+            logger.info(`User ${userAlias} is in the whitelist. Proceeding to parse the command.`);
 
-            if (command === 'lock') {
+            // 匹配“锁库 分支名”指令
+            const lockPattern = /^lock\s+(\S+)/;
+            const lockMatch = textContent.match(lockPattern);
+
+            // 匹配“开闸 分支名”指令
+            const unlockAllPattern = /^unlockall\s+(\S+)/;
+            const unlockAllMatch = textContent.match(unlockAllPattern);
+
+            // 匹配“增加一次性白名单 分支名 用户名”指令
+            const disposableWhitelistPattern = /^unlock\s+(\S+)\s+@(\S+)(?:$([^)]+)$)?/;
+            const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
+
+            // 根据指令类型执行对应逻辑
+            if (lockMatch) {
                 // 处理分支锁定逻辑
                 const success = await updateBranchLockStatus(branchIdentifier, 1);
                 const replyMessage = success
@@ -245,7 +271,7 @@ app.post('/', async (req, res) => {
                     : `锁定分支 ${branchIdentifier} 失败，请检查分支是否存在`;
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
 
-            } else if (command === 'unlockall') {
+            } else if (unlockAllMatch) {
                 // 处理分支解锁逻辑
                 const success = await updateBranchLockStatus(branchIdentifier, 0);
                 const replyMessage = success
@@ -253,20 +279,8 @@ app.post('/', async (req, res) => {
                     : `解锁分支 ${branchIdentifier} 失败，请检查分支是否存在`;
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
 
-            } else if (command === 'unlock') {
-                // 匹配“增加一次性白名单 分支名 用户名”指令
-                const disposableWhitelistPattern = /^unlock\s+(\S+)\s+@(\S+)(?:$([^)]+)$)?/;
-                const disposableWhitelistMatch = textContent.match(disposableWhitelistPattern);
-
-                if (!disposableWhitelistMatch) {
-                    return res.status(200).json({
-                        msgtype: 'text',
-                        text: {
-                            content: `指令格式错误，请使用以下格式：\n unlock 分支名 @用户名(真实姓名)`
-                        }
-                    });
-                }
-
+            } else if (disposableWhitelistMatch) {
+                // 提取目标用户信息
                 const targetUserAlias = disposableWhitelistMatch[2].trim(); // 目标用户标识
                 const targetUserName = disposableWhitelistMatch[3]?.trim() || ''; // 目标用户名（可选）
 
@@ -282,7 +296,17 @@ app.post('/', async (req, res) => {
                 }
 
                 return res.status(200).json({ msgtype: 'text', text: { content: replyMessage } });
+
+            } else {
+                // 无效指令
+                return res.status(200).json({
+                    msgtype: 'text',
+                    text: {
+                        content: `未识别的指令，请重新输入。\n示例：\n lock b01rel\n unlockall b01rel\n unlock b01rel @v_zccgzhang(张匆匆)`
+                    }
+                });
             }
+
         } else if (body.user_name && body.operation_kind && body.event_type) {
             // 处理 Web 钩子请求
             const result = await handleWebhookRequest(body);
