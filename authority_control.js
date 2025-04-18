@@ -2,15 +2,16 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2/promise'); // 使用 promise 版本
 const os = require('os'); // 用于获取网络接口信息
+const logger = require('./logger.js')
 
 const app = express();
 const PORT = process.argv[2] || 8080;
 
 // 创建日志工具
-const logger = {
-  info: (msg) => console.log(`INFO: ${msg}`),
-  error: (msg) => console.error(`ERROR: ${msg}`),
-};
+// const logger = {
+//   info: (msg) => console.log(`INFO: ${msg}`),
+//   error: (msg) => console.error(`ERROR: ${msg}`),
+// };
 
 // 创建数据库连接池配置 - 使用 promise 版本
 const pool = mysql.createPool({
