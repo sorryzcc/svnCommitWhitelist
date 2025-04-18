@@ -154,7 +154,8 @@ async function handleWebhookRequest(reqBody) {
             const disposableWhitelistArray = svn_lock_disposable_whitelist
                 .split(',')
                 .filter(Boolean)
-                .map(item => item.trim()); // 去掉多余空格
+                .map(item => item.trim()) // 去掉多余空格
+                .map(item => item.replace(/$.*$/, '').trim()); // 去掉括号及括号内的内容
 
             // 提取用户标识（去掉 @ 和括号内的内容）
             const userAliasOnly = user_name.replace(/^@/, '').replace(/$.*$/, '').trim();
@@ -162,8 +163,9 @@ async function handleWebhookRequest(reqBody) {
             // 检查一次性白名单中是否包含用户
             const index = disposableWhitelistArray.indexOf(userAliasOnly);
             if (index !== -1) {
-                disposableWhitelistArray.splice(index, 1); // 移除用户
-                const updatedWhitelist = disposableWhitelistArray.join(',');
+                // 移除用户
+                const updatedWhitelistArray = disposableWhitelistArray.filter(user => user !== userAliasOnly);
+                const updatedWhitelist = updatedWhitelistArray.join(',');
 
                 // 更新数据库
                 await conn.execute(
